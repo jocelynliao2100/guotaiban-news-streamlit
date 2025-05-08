@@ -6,6 +6,10 @@ import re
 from collections import Counter
 from io import StringIO
 
+# 設定 matplotlib 字體顯示中文（適用於 Streamlit Cloud）
+plt.rcParams['font.sans-serif'] = ['SimHei', 'Noto Sans CJK SC', 'Arial Unicode MS']
+plt.rcParams['axes.unicode_minus'] = False
+
 st.title("國台辦《政務要聞》新聞稿月統計圖表")
 
 uploaded_file = st.file_uploader("上傳 Word 檔（政務要聞原始碼）", type="docx")
@@ -14,7 +18,7 @@ if uploaded_file:
     doc = Document(uploaded_file)
     text = "\n".join([para.text for para in doc.paragraphs])
 
-    # 抓取 yyyy-mm-dd 格式日期
+    # 抓取 yyyy-mm-dd 格式的日期
     pattern = r"\b(2020|2021|2022|2023|2024|2025)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b"
     matches = re.findall(pattern, text)
     year_months = [f"{y}-{m}" for y, m, d in matches]
@@ -30,13 +34,19 @@ if uploaded_file:
     df = pd.DataFrame(data)
     df["date"] = pd.to_datetime(df["date"])
 
-    # 繪製圖表
+    # 顯示折線圖
     st.subheader("2020–2025 每月新聞稿發佈數量")
     fig, ax = plt.subplots(figsize=(12, 6))
     ax.plot(df["date"], df["count"], marker="o")
     ax.set_xlabel("日期")
-    ax.set_ylabel("新聞數")
+    ax.set_ylabel("新聞數量")
     ax.set_title("國台辦《政務要聞》新聞稿數量變化（2020–2025.04）")
     ax.grid(True)
     plt.xticks(rotation=45)
     st.pyplot(fig)
+
+    # 顯示資料表
+    st.subheader("新聞數據表格")
+    st.dataframe(df)
+else:
+    st.info("請上傳包含 2020–2025 日期的 .docx 檔案以開始分析。")
