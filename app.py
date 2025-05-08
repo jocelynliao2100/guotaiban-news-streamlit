@@ -1,38 +1,50 @@
 import streamlit as st
 from docx import Document
-import pandas as pd
-import plotly.express as px
+from collections import defaultdict
+import matplotlib.pyplot as plt
 import re
-from collections import Counter
+from datetime import datetime
+from io import BytesIO
 
-st.title("國台辦《政務要聞》新聞稿月統計圖表")
+st.set_page_config(layout="wide")
+st.title("國台辦新聞稿分析：2020–2025年4月各欄目發稿趨勢")
 
-uploaded_file = st.file_uploader("上傳 Word 檔（政務要聞原始碼）", type="docx")
+uploaded_files = st.file_uploader("請上傳五個國台辦 Word 文件", type="docx", accept_multiple_files=True)
 
-if uploaded_file:
-    doc = Document(uploaded_file)
-    text = "\n".join([para.text for para in doc.paragraphs])
+if uploaded_files and len(uploaded_files) == 5:
+    column_names = ["新聞要聞", "政務要聞", "交流交往", "部門涉台", "台辦動態"]
+    date_pattern = re.compile(r"\b(202[0-5])[-年/.](\d{1,2})[-月/.]?(?:\d{1,2})?日?\b")
+    year_month_counts = defaultdict(lambda: defaultdict(int))  # {欄目: {年月: 數量}}
 
-    # 抓取日期格式 yyyy-mm-dd
-    pattern = r"\b(2020|2021|2022|2023|2024|2025)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b"
-    matches = re.findall(pattern, text)
-    year_months = [f"{y}-{m}" for y, m, d in matches]
+    for file, column in zip(uploaded_files, column_names):
+        try:
+            document = Document(BytesIO(file.read()))
+            for para in document.paragraphs:
+                match = date_pattern.search(para.text)
+                if match:
+                    year, month = match.group(1), match.group(2)
+                    ym_key = f"{year}-{int(month):02d}"
+                    if "2020-01" <= ym_key <= "2025-04":
+                        year_month_counts[column][ym_key] += 1
+        except Exception as e:
+            st.error(f"{column} 檔案讀取失敗：{e}")
 
-    # 統計每月出現次數
-    counts = Counter(year_months)
-    all_months = pd.date_range("2020-01-01", "2025-04-30", freq="MS").strftime("%Y-%m").tolist()
-    data = {"日期": [], "新聞數量": []}
-    for ym in all_months:
-        data["日期"].append(ym)
-        data["新聞數量"].append(counts.get(ym, 0))
+    # 所有月份排序
+    all_months = sorted(set(k for d in year_month_counts.values() for k in d.keys()))
 
-    df = pd.DataFrame(data)
-    df["日期"] = pd.to_datetime(df["日期"])
+    # 畫圖
+    fig, ax = plt.subplots(figsize=(12, 6))
+    for column, counts in year_month_counts.items():
+        y_vals = [counts.get(month, 0) for month in all_months]
+        ax.plot(all_months, y_vals, label=column)
 
-    # 顯示互動式折線圖（支援中文）
-    fig = px.line(df, x="日期", y="新聞數量", title="國台辦《政務要聞》新聞稿數量變化（2020–2025.04）")
-    st.plotly_chart(fig)
-
-    # 表格
-    st.subheader("新聞數據表格")
-    st.dataframe(df)
+    ax.set_title("2020–2025年4月 國台辦各欄目新聞稿量變化")
+    ax.set_xlabel("年月")
+    ax.set_ylabel("新聞稿數量")
+    ax.set_xticks(range(len(all_months)))
+    ax.set_xticklabels(all_months, rotation=45)
+    ax.legend()
+    ax.grid(True)
+    st.pyplot(fig)
+else:
+    st.warning("請一次上傳五個 Word 文件，並依序對應五個欄目。")
