@@ -46,3 +46,22 @@ if uploaded_file:
         result_df = filtered_df[filtered_df["標題"].str.contains(keyword)]
         st.write(f"🔍 找到 {len(result_df)} 則相關新聞：")
         st.dataframe(result_df)
+
+if not df.empty:
+    df["日期"] = pd.to_datetime(df["日期"], errors='coerce')  # 加上這行自動轉型，錯誤會變 NaT
+    df = df.dropna(subset=["日期"])  # 避免 NaT 資料導致錯誤
+
+    years = sorted(set(df["日期"].dt.year))
+    selected_years = st.multiselect("選擇年份", years, default=years)
+    filtered_df = df[df["日期"].dt.year.isin(selected_years)]
+
+    st.dataframe(filtered_df)
+
+    st.subheader("發稿頻率統計")
+    monthly_count = (
+        filtered_df["日期"]
+        .apply(lambda d: d.strftime("%Y-%m"))
+        .value_counts()
+        .sort_index()
+    )
+    st.bar_chart(monthly_count)
