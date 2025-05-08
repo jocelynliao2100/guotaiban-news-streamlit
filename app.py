@@ -1,67 +1,83 @@
+!pip install python-docx
 
-import streamlit as st
 from docx import Document
-import pandas as pd
 import re
-from datetime import datetime
+import pandas as pd
+from collections import Counter
+import matplotlib.pyplot as plt
+# from matplotlib.font_manager import FontProperties  # 移除這行
+from io import BytesIO
+from google.colab import files
 
-st.title("國台辦《政務要聞》新聞稿分析")
+# 設定中文字體 (移除這部分)
+# font_path = './NotoSansCJKjp-Regular.otf'
+# font = FontProperties(fname=font_path)
 
-uploaded_file = st.file_uploader("上傳 Word 檔（政務要聞原始碼）", type="docx")
 
-if uploaded_file:
-    doc = Document(uploaded_file)
-    paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
-    pattern = re.compile(r"\[\s*(\d{4}-\d{2}-\d{2})\s*\].*?href=\"(.*?)\".*?title=\"(.*?)\"")
-    records = []
+# 載入 Word 文件
+uploaded = files.upload() #Colab上傳檔案
+for filename in uploaded.keys():
+  try:
+      document = Document(BytesIO(uploaded[filename]))
+  except Exception as e:
+      print(f"讀取文件時發生錯誤：{e}")
+      exit()  # 終止程式，因為無法繼續處理
 
-    for para in paragraphs:
-        match = pattern.search(para)
-        if match:
-            date_str, url, title = match.groups()
-            try:
-                date = datetime.strptime(date_str, "%Y-%m-%d").date()
-                records.append((date, title.strip(), url.strip()))
-            except ValueError:
-                continue
 
-    df = pd.DataFrame(records, columns=["日期", "標題", "連結"])
-    years = sorted(set(df["日期"].dt.year))
-    selected_years = st.multiselect("選擇年份", years, default=years)
-    filtered_df = df[df["日期"].dt.year.isin(selected_years)]
+# 取得段落文字，並提取 2020–2025 年的日期（格式：yyyy-mm-dd）
+text_for_analysis = "\n".join([para.text for para in document.paragraphs])
+pattern = r"\b(2020|2021|2022|2023|2024|2025)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b"
+matches = re.findall(pattern, text_for_analysis)
+year_months = [f"{y}-{m}" for y, m, d in matches]  # 保留年月
 
-    st.dataframe(filtered_df)
 
-    st.subheader("發稿頻率統計")
-    monthly_count = (
-        filtered_df["日期"]
-        .apply(lambda d: d.strftime("%Y-%m"))
-        .value_counts()
-        .sort_index()
-    )
-    st.bar_chart(monthly_count)
+# 統計每個年月的新聞稿數量
+counts = Counter(year_months)
 
-    keyword = st.text_input("關鍵字搜尋（標題）")
-    if keyword:
-        result_df = filtered_df[filtered_df["標題"].str.contains(keyword)]
-        st.write(f"🔍 找到 {len(result_df)} 則相關新聞：")
-        st.dataframe(result_df)
 
-if not df.empty:
-    df["日期"] = pd.to_datetime(df["日期"], errors='coerce')  # 加上這行自動轉型，錯誤會變 NaT
-    df = df.dropna(subset=["日期"])  # 避免 NaT 資料導致錯誤
+# 建立每年每月新聞數的表格
+years = list(range(2020, 2026))  # 包含2025
+months = [f"{i:02d}" for i in range(1, 13)]
+data = []
+for y in years:
+    row = {'year': y}
+    for m in months:
+        row[m] = counts.get(f"{y}-{m}", 0)
+    data.append(row)
+df = pd.DataFrame(data)
 
-    years = sorted(set(df["日期"].dt.year))
-    selected_years = st.multiselect("選擇年份", years, default=years)
-    filtered_df = df[df["日期"].dt.year.isin(selected_years)]
+# 在Colab中安裝中文字體
+!apt-get -qq install fonts-noto-cjk fonts-noto-cjk-extra
 
-    st.dataframe(filtered_df)
+# 重新設置matplotlib字體緩存 (使用新的方法)
+import matplotlib.font_manager as fm
+fm.fontManager.addfont('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc')
+# 如果上述方法不存在，則忽略錯誤，繼續執行
+# 較新版本的matplotlib已經在安裝字體後會自動刷新緩存
 
-    st.subheader("發稿頻率統計")
-    monthly_count = (
-        filtered_df["日期"]
-        .apply(lambda d: d.strftime("%Y-%m"))
-        .value_counts()
-        .sort_index()
-    )
-    st.bar_chart(monthly_count)
+# 設定使用Noto Sans CJK字體（Colab預裝）
+plt.rcParams['font.sans-serif'] = ['Noto Sans CJK TC', 'Noto Sans CJK SC', 'Noto Sans CJK JP']
+plt.rcParams['axes.unicode_minus'] = False
+
+# 下載思源黑體並使用（確保可用）
+!wget -q https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf -O NotoSansCJKjp-Regular.otf
+font_path = './NotoSansCJKjp-Regular.otf'
+font = FontProperties(fname=font_path)
+
+# 將寬表轉為長表，準備畫圖
+df_long = df.melt(id_vars='year', value_vars=months, var_name='month', value_name='count')
+df_long['date'] = pd.to_datetime(df_long['year'].astype(str) + '-' + df_long['month'])
+df_long = df_long[df_long['date'] <= '2025-04-30']  # 僅保留至2025年4月
+df_long = df_long.sort_values('date')
+
+
+# 繪製折線圖
+plt.figure(figsize=(12, 6))
+plt.plot(df_long['date'], df_long['count'], marker='o')
+plt.xlabel('日期')  # 移除 fontproperties
+plt.ylabel('新聞稿數量') # 移除 fontproperties
+plt.title('國台辦「政務要聞」新聞稿每月數量 (2020–2025.04)') # 移除 fontproperties
+plt.xticks(rotation=45)
+plt.grid(True)
+plt.tight_layout()
+plt.show()
