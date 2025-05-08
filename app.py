@@ -1,44 +1,41 @@
 import streamlit as st
 from docx import Document
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
 import re
-import jieba
 from collections import Counter
-from datetime import datetime
 
-st.title("國台辦「政務要聞」新聞稿分析")
+st.title("國台辦《政務要聞》新聞稿月統計圖表（Plotly 中文支援）")
 
-uploaded_file = st.file_uploader("上傳 Word 檔案（.docx）", type="docx")
+uploaded_file = st.file_uploader("上傳 Word 檔（政務要聞原始碼）", type="docx")
 
 if uploaded_file:
     doc = Document(uploaded_file)
-    paragraphs = [para.text.strip() for para in doc.paragraphs if para.text.strip()]
+    text = "\n".join([para.text for para in doc.paragraphs])
 
-    # 抽取日期與標題
-    date_title_pairs = []
-    pattern = re.compile(r'\[\s*(\d{4})[-年](\d{1,2})[-月](\d{1,2})\s*\]')
+    # 抓取日期格式 yyyy-mm-dd
+    pattern = r"\b(2020|2021|2022|2023|2024|2025)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b"
+    matches = re.findall(pattern, text)
+    year_months = [f"{y}-{m}" for y, m, d in matches]
 
-    for para in paragraphs:
-        match = pattern.search(para)
-        if match:
-            year, month, day = match.groups()
-            date = datetime(int(year), int(month), int(day)).date()
-            title_match = re.search(r'(?<=\]）?(?P<title>.+)$', para)
-            title = title_match.group("title") if title_match else "未知標題"
-            date_title_pairs.append((date, title))
+    # 統計每月出現次數
+    counts = Counter(year_months)
+    all_months = pd.date_range("2020-01-01", "2025-04-30", freq="MS").strftime("%Y-%m").tolist()
+    data = {"日期": [], "新聞數量": []}
+    for ym in all_months:
+        data["日期"].append(ym)
+        data["新聞數量"].append(counts.get(ym, 0))
 
-    if date_title_pairs:
-        df = pd.DataFrame(date_title_pairs, columns=["date", "title"])
-        df['month'] = df['date'].apply(lambda d: d.strftime('%Y-%m'))
-        df['count'] = 1
+    df = pd.DataFrame(data)
+    df["日期"] = pd.to_datetime(df["日期"])
 
-        st.subheader("📈 發布量時間折線圖")
-        df_daily = df.groupby("date").count().rename(columns={"count": "news_count"})
-        st.line_chart(df_daily["news_count"])
+    # 顯示互動式折線圖（支援中文）
+    fig = px.line(df, x="日期", y="新聞數量", title="國台辦《政務要聞》新聞稿數量變化（2020–2025.04）")
+    st.plotly_chart(fig)
 
-        st.subheader("📰 新聞發布紀錄（前20筆）")
-        st.dataframe(df[['date', 'title']].head(20))
+    # 表格
+    st.subheader("新聞數據表格")
+    st.dataframe(df)
 
         # 前20大中文關鍵字
         all_text = " ".join(df['title'].tolist())
