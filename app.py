@@ -34,7 +34,7 @@ if uploaded_files and len(uploaded_files) == 5:
     all_months = sorted(set(k for d in year_month_counts.values() for k in d.keys()))
 
     # 設定中文字型
-    font_path = "path/to/your/chinese_font.ttf"  # 替換為你的中文字型檔案路徑
+    font_path = st.secrets["CHINESE_FONT_PATH"]  # 假設你在 Secrets 中設定了 CHINESE_FONT_PATH
     font_prop = FontProperties(fname=font_path)
 
     # 畫圖
