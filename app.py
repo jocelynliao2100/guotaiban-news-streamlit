@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import re
 from datetime import datetime
 from io import BytesIO
+from matplotlib.font_manager import FontProperties
 
 st.set_page_config(layout="wide")
 st.title("國台辦新聞稿分析：2020–2025年4月各欄目發稿趨勢")
@@ -32,18 +33,22 @@ if uploaded_files and len(uploaded_files) == 5:
     # 所有月份排序
     all_months = sorted(set(k for d in year_month_counts.values() for k in d.keys()))
 
+    # 設定中文字型
+    font_path = "path/to/your/chinese_font.ttf"  # 替換為你的中文字型檔案路徑
+    font_prop = FontProperties(fname=font_path)
+
     # 畫圖
     fig, ax = plt.subplots(figsize=(12, 6))
     for column, counts in year_month_counts.items():
         y_vals = [counts.get(month, 0) for month in all_months]
         ax.plot(all_months, y_vals, label=column)
 
-    ax.set_title("2020–2025年4月 國台辦各欄目新聞稿量變化")
-    ax.set_xlabel("年月")
-    ax.set_ylabel("新聞稿數量")
+    ax.set_title("2020–2025年4月 國台辦各欄目新聞稿量變化", fontproperties=font_prop)
+    ax.set_xlabel("年月", fontproperties=font_prop)
+    ax.set_ylabel("新聞稿數量", fontproperties=font_prop)
     ax.set_xticks(range(len(all_months)))
-    ax.set_xticklabels(all_months, rotation=45)
-    ax.legend()
+    ax.set_xticklabels(all_months, rotation=45, fontproperties=font_prop)
+    ax.legend(prop=font_prop)  # 圖例也設定字型
     ax.grid(True)
     st.pyplot(fig)
 else:
